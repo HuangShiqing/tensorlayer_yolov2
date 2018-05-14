@@ -1,62 +1,73 @@
+import tensorflow as tf
 import tensorlayer as tl
 from tensorlayer.layers import *
 
-
-from tensorlayer.d
-
-# import functools
-# import warnings
-# from . import _logging as logging
-#
-#
-# def deprecated_alias(end_support_version, **aliases):
-#     def deco(f):
-#
-#         @functools.wraps(f)
-#         def wrapper(*args, **kwargs):
-#
-#             try:
-#                 func_name = "{}.{}".format(args[0].__class__.__name__, f.__name__)
-#             except (NameError, IndexError):
-#                 func_name = f.__name__
-#
-#             rename_kwargs(kwargs, aliases, end_support_version, func_name)
-#
-#             return f(*args, **kwargs)
-#
-#         return wrapper
-#
-#     return deco
-#
-#
-# def rename_kwargs(kwargs, aliases, end_support_version, func_name):
-#     for alias, new in aliases.items():
-#
-#         if alias in kwargs:
-#
-#             if new in kwargs:
-#                 raise TypeError('{}() received both {} and {}'.format(func_name, alias, new))
-#
-#             warnings.warn('{}() - {} is deprecated; use {}'.format(func_name, alias, new), DeprecationWarning)
-#             logging.warning(
-#                 "DeprecationWarning: {}(): "
-#                 "`{}` argument is deprecated and will be removed in version {}, "
-#                 "please change for `{}.`".format(func_name, alias, end_support_version, new)
-#             )
-#             kwargs[new] = kwargs.pop(alias)
+from tensorlayer.deprecation import deprecated_alias
+import tensorlayer._logging as logging
 
 
 class RouteLayer(Layer):
     @deprecated_alias(layer='prev_layer', end_support_version=1.9)
-    def __init__(self, layer=None, route=None, name='route'):
-        # Layer.__init__(self, layer=layer, name=name)
+    def __init__(self, prev_layer=None, routes=None, name='routes'):
         super(RouteLayer, self).__init__(prev_layer=prev_layer, name=name)
 
-        if abs(route) >= len(self.inputs.all_layers):
-            raise Exception("beyond the num of layers")
+        for route in routes:
+            if abs(route) >= len(prev_layer.all_layers):
+                raise Exception("beyond the num of layers")
 
-        self.inputs = layer.outputs
+        logging.info("RouteLayer  %s: routes:%s" % (name, str(routes)))
 
-        self.outputs = self.inputs.all_layers[route - 1]
+        self.inputs = prev_layer.outputs
+
+        out = list()
+        for i, route in enumerate(routes):
+            out.append(prev_layer.all_layers[route])
+
+        with tf.variable_scope(name):
+            self.outputs = tf.concat([o for o in out], 3)
 
         self.all_layers.append(self.outputs)
+
+
+class ReorgLayer(Layer):
+    @deprecated_alias(layer='prev_layer', end_support_version=1.9)
+    def __init__(self, prev_layer=None, reorg=None, name='reorg'):
+        super(ReorgLayer, self).__init__(prev_layer=prev_layer, name=name)
+
+        out = list()
+        logging.info("ReorgLayer  %s: reorg:%s" % (name, str(reorg)))
+
+        self.inputs = prev_layer.outputs
+
+        with tf.variable_scope(name):
+            self.outputs = tf.space_to_depth(self.inputs, reorg)
+
+        self.all_layers.append(self.outputs)
+
+# class RouteLayer(Layer):
+#     @deprecated_alias(layer='prev_layer', end_support_version=1.9)
+#     def __init__(self, prev_layer=None, routes=None, name='routes'):
+#         super(ReorgLayer, self).__init__(prev_layer=prev_layer, name=name)
+#
+#         routes.insert(0, -1)
+#         out = list()
+#
+#         for route in routes:
+#             if abs(route) >= len(prev_layer.all_layers):
+#                 raise Exception("beyond the num of layers")
+#
+#         logging.info("RouteLayer  %s: routes:%s" % (name, str(routes)))
+#
+#         self.inputs = prev_layer.outputs
+#
+#         for i, route in enumerate(routes):
+#             out.append(prev_layer.all_layers[route])
+#
+#         for i, route in enumerate(out):
+#             if i > 0:
+#                 out[i] = tf.space_to_depth(out[i], out[i].get_shape()[1].value / out[0].get_shape()[1].value)
+#
+#         with tf.variable_scope(name):
+#             self.outputs = tf.concat([o for o in out], 3)
+#
+#         self.all_layers.append(self.outputs)
